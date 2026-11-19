@@ -1,0 +1,59 @@
+metadata:
+  generated: "2026-11-18"
+  source_plan: "plan.md"
+  target_tasks: "plan.md"
+summary:
+  total_plan_items: 5
+  covered_plan_items: 5
+  missing_plan_items: 0
+  coverage_percentage: 100.0
+  total_tasks_generated: 13
+  orphan_tasks: 0
+phases:
+  - phase_id: "Phase-1"
+    phase_name: "Inputs And SDLC Baseline"
+    items:
+      - item_id: "1.1"
+        tasks: [{task_id: "T001"}, {task_id: "T002"}]
+  - phase_id: "Phase-2"
+    phase_name: "Discovery And Selection"
+    items:
+      - item_id: "2.1"
+        tasks: [{task_id: "T003"}, {task_id: "T004"}]
+  - phase_id: "Phase-3"
+    phase_name: "Runtime Integration And Audit"
+    items:
+      - item_id: "3.1"
+        tasks: [{task_id: "T005"}, {task_id: "T006"}, {task_id: "T007"}, {task_id: "T008"}]
+  - phase_id: "Phase-4"
+    phase_name: "Lab Demonstration"
+    items:
+      - item_id: "4.1"
+        tasks: [{task_id: "T009"}, {task_id: "T010"}, {task_id: "T011"}]
+  - phase_id: "Phase-5"
+    phase_name: "Verification And Handoff"
+    items:
+      - item_id: "5.1"
+        tasks: [{task_id: "T012"}, {task_id: "T013"}]
+missing_plan_items: []
+orphan_tasks: []
+upstream_trace:
+  - plan_item: "1.1"
+    source_requirements: ["REQ-007", "REQ-008"]
+    tasks: ["T001", "T002"]
+  - plan_item: "2.1"
+    source_requirements: ["REQ-001", "REQ-002"]
+    tasks: ["T003", "T004"]
+  - plan_item: "3.1"
+    source_requirements: ["REQ-003", "REQ-004", "REQ-005", "REQ-006"]
+    tasks: ["T005", "T006", "T007", "T008"]
+  - plan_item: "4.1"
+    source_requirements: ["REQ-004", "REQ-005", "REQ-007"]
+    tasks: ["T009", "T010", "T011"]
+  - plan_item: "5.1"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006", "REQ-007", "REQ-008"]
+    tasks: ["T012", "T013"]
+validation:
+  passed: true
+  errors: []
+  warnings: ["Task coverage only; all implementation tasks remain unchecked."]
