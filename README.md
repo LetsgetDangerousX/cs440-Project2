@@ -101,7 +101,20 @@ Get-Content .mini-coding-agent\skills.log    # Windows PowerShell
 
 ### Running Lab 4 with the skills
 
-The agent writes files at the root of its workspace, so run it in a separate Git repo next to this one:
+The agent writes files at the root of its workspace, so run it in a separate Git repo next to this one.
+
+macOS / Linux:
+
+```bash
+mkdir lab4 && cd lab4 && git init
+mkdir skills
+cp -r ../mini-coding-agent/skills/* skills/
+cp ../mini-coding-agent/docs/lab4-instructions.md .
+git add . && git commit -m "Lab 4 workspace"
+python3 ../mini-coding-agent/mini_coding_agent.py --cwd . --approval auto --ollama-timeout 900 --max-steps 15
+```
+
+Windows PowerShell:
 
 ```powershell
 mkdir lab4; cd lab4; git init
@@ -117,7 +130,7 @@ On a CPU-only laptop each model step can take several minutes, so the longer tim
 ### Limitations
 
 - Matching compares words, not meaning, so synonyms such as "subagents" and "specialists" don't count toward the score.
-- The Lab 5 skills were written for macOS and Linux shells. On Windows their shell commands fail, because the agent's `run_shell` uses Command Prompt.
+- The Lab 5 skills were written for macOS and Linux shells. On Windows their shell commands fail, because the agent's `run_shell` uses Command Prompt. Running the agent from Git Bash or WSL avoids this.
 
 ### Project files added for Project 2
 
