@@ -1,6 +1,6 @@
 # Lab 4 Run Log: Mini Coding Agent with Skills
 
-Run 2026-11-19 by Amber Ferrell with `qwen3.5:4b` through Ollama, on a CPU-only Windows laptop (Intel i5-8250U, 16 GB RAM). The agent works in its own Git repo, `Project2/lab4`, which starts with only `lab4-instructions.md` and the two Lab 5 skills (`skills/delegate`, `skills/hook-check`). Our team's original Lab 4 repos are the answer key.
+Run with `qwen3.5:4b` through Ollama, on a CPU-only Windows laptop (Intel i5-8250U, 16 GB RAM). The agent works in its own Git repo, `Project2/lab4`, which starts with only `lab4-instructions.md` and the two Lab 5 skills (`skills/delegate`, `skills/hook-check`). Our team's original Lab 4 repos are the answer key.
 
 Start command for every request below:
 
