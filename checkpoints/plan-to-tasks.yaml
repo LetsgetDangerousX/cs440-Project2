@@ -1,5 +1,6 @@
 metadata:
   generated: "2026-11-18"
+  reconciled: "2026-11-22"
   source_plan: "plan.md"
   target_tasks: "plan.md"
 summary:
@@ -56,4 +57,4 @@ upstream_trace:
 validation:
   passed: true
   errors: []
-  warnings: ["Task coverage only; all implementation tasks remain unchecked."]
+  warnings: ["Task coverage only; plan.md now distinguishes delivered, partial, and unverified tasks from PRs #3 and #4. Coverage does not establish completion or Lab 4 success."]

@@ -1,5 +1,6 @@
 metadata:
   generated: "2026-11-18"
+  reconciled: "2026-11-22"
   source_spec: "spec.md"
   target_plan: "plan.md"
 summary:
@@ -29,4 +30,4 @@ orphan_plan_items: []
 validation:
   passed: true
   errors: []
-  warnings: ["Traceability only; implementation is not complete. Lab inputs remain required."]
+  warnings: ["Traceability only; PR #3 shipped the component and handout, and PR #4 recorded a partial Lab 4 run. Original acceptance gaps and full lab verification remain open; see spec.md and plan.md."]
