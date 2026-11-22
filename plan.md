@@ -1,165 +1,163 @@
 # Implementation Plan: Agent Skills Component
 
-Date: 2026-11-18. Status: Proposed, not implemented.
-Inputs: [intend.md](intend.md), [spec.md](spec.md), the existing agent and skills.
+Original date: 2026-11-18 (PR #2). Updated: 2026-11-22.
+Status: Component shipped in PR #3; documentation and partial Lab 4 run in PR #4.
+Inputs: [intend.md](intend.md), [spec.md](spec.md), implementation, tests, and
+[LAB4_RUN.md](LAB4_RUN.md). This is a reconciliation of the original plan, not a
+claim that every planned deliverable was completed.
 
-## Summary
+## Delivered Architecture
 
-Add a seventh component in the existing Python module: a `SkillRegistry` that
-discovers skill metadata, ranks candidates, and loads instructions. Integrate
-automatic selection into `MiniAgent.ask`, explicit execution-time selection into
-the tool registry, active instructions into `prompt`, and structured audit events
-into `SessionStore` persistence. Do not introduce a second agent loop.
+The seventh component lives in the existing
+[mini_coding_agent.py](mini_coding_agent.py): `SkillRegistry`, lexical scoring,
+`SkillLog`, and request-scoped active instructions. `MiniAgent.ask` selects before
+the first model call, `prompt` retains active bodies outside transcript clipping,
+and `use_skill` lets the model load another known skill through the ordinary
+validated tool loop. No second agent loop or new runtime service was added.
 
-## Technical Context
+The parser is a standard-library YAML-style subset. Registry construction reads
+and caches metadata **and bodies**; activation does not reread or hash files.
+Automatic selection uses stopword-filtered `[a-z0-9]+` token counts, cosine
+similarity rounded to four decimals, threshold `0.2`, and name-only ties.
+There is no `skill:<name>` user directive. Valid model requests activate the exact
+requested skill independent of query scores, and duplicate activation is denied.
 
-- Python 3.10+, Ollama, existing pytest/FakeModelClient helpers; no new runtime
-  service. Keep metadata parsing within the specified subset unless a maintained
-  YAML parser is deliberately selected and declared as a dependency.
-- `MiniAgent.ask` controls model/tool turns; `run_tool` and `validate_tool`
-  enforce permissions. These are the integration points, not shell execution of
-  Markdown files.
-- `build_prefix` is stable. Put changing active instructions in `prompt`, outside
-  history clipping, and clear them between requests. Do not inject all skill bodies.
-- `SessionStore` already saves JSON under `.mini-coding-agent/sessions/`.
-  Add an optional `skill_events` collection with legacy-session defaults rather
-  than new transcript roles that `history_text` cannot currently render.
-- The Lab 5 skills already exist: `skills/delegate/SKILL.md` provides the bounded
-  delegation workflow, and `skills/hook-check/SKILL.md` checks context-switcher
-  hook routing. Reuse both as the component's initial skill catalog; do not
-  create replacements. Check their referenced Claude/AIMA resources in the
-  Lab 4 workspace before attempting the applicable workflow.
+Logging uses a separate append-only `.mini-coding-agent/skills.log`, not the
+proposed `SessionStore.skill_events`. Its four events capture prompts, similarity,
+activation, and abbreviated activity/final text with request/session IDs.
+`skill_executed` does not encode verified workflow completion. Existing session
+JSON remains unchanged; active instructions are not restored on resume. Default
+delegated children retain read-only/depth bounds but receive no skills or skill
+log, and parent results do not expose child session IDs.
 
-## Constraints And Guidelines
+The two original Lab 5 skills were reused unchanged. PR #3 supplied the Lab 4
+handout; PR #4 recorded real Ollama configuration attempts and README usage
+instructions. Lab 4 is context engineering configuration, not Q-learning code.
 
-No project constitution, upstream architecture artifacts, or applicable migration
-guidelines were supplied. This is a local component addition, not a rewrite.
-Use the assignment specification and existing agent conventions as constraints:
-retain one module, existing tool protocol, local storage, bounded execution, and
-all permission checks. Do not add a framework, vector database, or custom
-specialist runtime. The lab demonstration remains gated on actual lab inputs.
+## Changes From The Original Proposal
 
-## Proposed Selection And Execution Contract
+| Original Proposal | Delivered Result / Remaining Gap |
+| --- | --- |
+| Provisional `0.25` threshold, calibrated before freezing | Default `0.2`; routing tests and real-run scores exist, but no separate calibration report |
+| Exact user-name precedence and name/path tie-break | No explicit user directive; rounded-score ties use name; `use_skill` requests an exact name |
+| Metadata snapshot per request and revalidated/hash-recorded activation | Files read once at registry construction; cached bodies used without activation-time revalidation/hash |
+| Bound active-skill count and total content size | Entire skill file limited to 20,000 characters; no aggregate activation bound beyond registry size/tool steps |
+| Session `skill_events`, activation IDs, complete provenance and lifecycle states | Separate JSON-lines log with request/session IDs and abbreviated activity, no hashes or verified lifecycle |
+| Linked child skill audit | Default children get no skills/log; no parent-to-child session ID link |
+| Demonstrate with `--approval ask` | Recorded run used `auto`; CLI default remains `ask`; this deviation is evidence, not a new safety recommendation |
+| Complete Lab 4 validation and skills example in `EXAMPLE.md` | Partial run and README reproduction steps; generic `EXAMPLE.md` unchanged |
 
-1. Discover immediate skill folders beneath both workspace-root `skills/` and
-   `skill/`. Resolve and validate paths, including symlinks, with workspace
-   containment rules. Sort results; reject duplicate names or ambiguous files.
-2. Snapshot validated metadata per request. Tokenize names/descriptions and query
-   with one documented lowercase word-token rule. Compute cosine similarity of
-   token-count vectors using the standard library; empty vectors score zero.
-   This is lexical similarity, not semantic understanding.
-3. Start with a provisional threshold of `0.25`; calibrate using relevant,
-   unrelated, and overlapping prompts before freezing it. Log the actual value.
-   Select the highest eligible score; break ties by normalized skill name and
-   path. A narrow, documented `skill:<name>` directive requests an exact name
-   without guessing from incidental mentions. Unknown names produce diagnostics.
-4. Add `use_skill(name, query)` for needs discovered after the initial prompt.
-   Validate the name against the registry, score/log the query, and mark this as
-   model-requested activation rather than threshold-based automatic selection.
-   Load through one shared activation path; suppress repeated activation within
-   the request and bound the active-skill count/content size.
-5. Revalidate and read the complete body at activation, recording its content hash.
-   Reject empty/oversized bodies or changed/unsafe paths. Keep loaded instructions
-   in a dedicated request-scoped section with their identity and provenance.
-   Instructions remain subordinate to system rules, user scope, and permissions.
-6. Tool calls still pass through `run_tool`. Associate subsequent actions with
-   active activation IDs without claiming a particular instruction caused them.
-   Mark started only when workflow actions occur. Finalize as incomplete unless
-   the skill's completion conditions have recorded supporting outcomes; verify
-   Lab 4 correctness independently against its rubric. No silent auto-execution
-   of shell snippets, unsupported specialists, or recursive activation loops.
+See [spec.md](spec.md) for exact contracts and limitations. Original commitments
+that were not delivered remain explicit rather than being retroactively passed.
 
-The first falsifiable implementation hypothesis is that instructions retained in
-`prompt` can guide the existing loop without changing tool execution. Check it
-with `FakeModelClient`: a matching request must put the body in the first and
-subsequent prompts, produce linked ordinary tool events, and omit it on the next
-unrelated request. Failure means repairing context lifetime before adding more
-routing behavior.
+## Implementation Steps And Task Status
 
-## Implementation Steps And Tasks
+Original IDs and plan-item mappings are retained for checkpoint traceability.
+Checked tasks have the stated deliverable in the merged PRs. Unchecked tasks
+may be partially implemented; their remaining work is described below.
+No design approval, pre-implementation test result, or complete lab success is
+inferred from the presence of merged code.
 
 ### Phase 1: Inputs And SDLC Baseline
 
 Plan item **1.1**. Requirements: REQ-007, REQ-008.
 
-- [ ] T001 [Plan:1.1] Review `intend.md` and `spec.md`; supply the Lab 4 assignment/rubric and project path. The Lab 5 skills are already `delegate` and `hook-check`; only missing Lab 4 inputs block the lab phase. Record permission in `spec.md` if skill adaptation is needed.
-- [ ] T002 [Plan:1.1] Approve the proposed contracts in `plan.md` and capture the existing `python -m pytest -q` result before implementation. Keep the two checkpoint files aligned with approved changes.
+- [x] T001 [Plan:1.1] Supply Lab 4 inputs. PR #3 added [docs/lab4-instructions.md](docs/lab4-instructions.md); PR #4 identifies the separate workspace and answer-key repositories. Skills were reused unchanged, so no adaptation approval was needed. External artifacts remain necessary for reproduction.
+- [ ] T002 [Plan:1.1] Capture design approval and the existing suite result before implementation. The original SDLC/checkpoint files exist, but the later PRs do not supply a recorded pre-implementation test result or separate design approval. Do not fabricate retrospective baseline evidence.
 
 ### Phase 2: Discovery And Selection
 
 Plan item **2.1**. Requirements: REQ-001, REQ-002.
 
-- [ ] T003 [Plan:2.1] Add `SkillRegistry` metadata discovery/loading in `mini_coding_agent.py`, including supported frontmatter, both folder/file spellings, deterministic ordering, containment, limits, and recoverable diagnostics.
-- [ ] T004 [Plan:2.1] Implement exact-name requests and deterministic scoring in `mini_coding_agent.py`; calibrate the threshold with recorded matching/nonmatching/ambiguous examples from the existing `delegate` and `hook-check` descriptions, verifying that both are discoverable and individually selectable.
+- [ ] T003 [Plan:2.1] Partial: `SkillRegistry` implements both roots, case-insensitive filename recognition, subset parsing, diagnostics, duplicate handling, file limits, and resolved-file containment. Recoverable directory-enumeration errors and activation-time revalidation from the original contract remain absent.
+- [ ] T004 [Plan:2.1] Partial: deterministic scoring with threshold `0.2`, rounded-score/name ordering, and relevant/unrelated/tie regression tests shipped. Exact user directives, original precedence behavior, and a separate calibration record did not.
 
 ### Phase 3: Runtime Integration And Audit
 
 Plan item **3.1**. Requirements: REQ-003, REQ-004, REQ-005, REQ-006.
 
-- [ ] T005 [Plan:3.1] Integrate selection and active-skill context with `MiniAgent.ask` and `prompt` in `mini_coding_agent.py`; run the focused FakeModelClient context-lifetime check immediately before extending integration.
-- [ ] T006 [Plan:3.1] Register and validate `use_skill` in `mini_coding_agent.py`, including its prompt/example contract, shared activation path, duplicate guard, step accounting, and unchanged action permissions.
-- [ ] T007 [Plan:3.1] Add durable `skill_events` in `mini_coding_agent.py` with request/activation IDs, full query, scored candidates, threshold/algorithm, trigger source, path/hash, lifecycle, tool results, and errors; default missing fields on legacy sessions.
-- [ ] T008 [Plan:3.1] Check reset/resume and delegation handling in `mini_coding_agent.py`: no stale request context, no implicit rerun on resume, read-only children keep their restrictions, and child audit events remain discoverable through linked session IDs.
+- [x] T005 [Plan:3.1] Integrate automatic activation and dedicated request-scoped instructions. FakeModelClient regression coverage verifies bodies in the first/subsequent prompts and their omission on the next unrelated request.
+- [x] T006 [Plan:3.1] Register/validate `use_skill(name, query)` with catalog, example, shared activation path, duplicate guard, and ordinary step/approval handling. Named activation is independent of the logged scoring result.
+- [ ] T007 [Plan:3.1] Partial: `SkillLog` persists four event types in a separate log. Activation IDs, hashes/content provenance, full outcomes, structured lifecycle states, and comprehensive failed-call scoring remain unimplemented.
+- [ ] T008 [Plan:3.1] Partial: reset clears active instructions, construction/resume starts with none, and default children get no skills. Existing session/delegation tests remain; dedicated skill-resume and exception/step-limit coverage plus linked child-session audit evidence are not supplied.
 
 ### Phase 4: Existing Lab 5 Skills Applied To Lab 4
 
 Plan item **4.1**. Requirements: REQ-004, REQ-005, REQ-007.
 
-- [ ] T009 [Plan:4.1] After T001 supplies the Lab 4 inputs, check prerequisites for the existing `skills/delegate/SKILL.md` and `skills/hook-check/SKILL.md` workflows. Reuse them without rewriting by default; adapt only with permission, preserving their substantive procedures and documenting portability changes.
-- [ ] T010 [Plan:4.1] Run the mini agent against the supplied Lab 4 workspace with the real assignment prompt and Ollama; make both existing skills available inside that target workspace and activate the applicable workflow when needed. Capture selection, instructions, tool actions, and final artifacts. Use `--approval ask` for the demonstration.
-- [ ] T011 [Plan:4.1] Create `LAB4_RUN.md` with the exact command, prompt, model/configuration, skill identity/hash, scores, session/evidence paths, rubric results, and limitations. Report an unsuccessful attempt honestly; do not mark Lab 4 solved without independent checks.
+- [ ] T009 [Plan:4.1] Partial: both existing skills were made available unchanged. The recorded attempt exposed Windows shell incompatibilities; complete Claude/AIMA/hook prerequisite checks and an applicable `hook-check` workflow remain open. Adapt skills only with permission.
+- [ ] T010 [Plan:4.1] Partial: three real Ollama requests attempted grid documentation and Strategy 4 specialist files using `auto`, not planned `ask`. No-match and `delegate` activation are documented; complete strategies 1/4 configuration, hook execution, and independently verified artifacts are not.
+- [ ] T011 [Plan:4.1] Partial: [LAB4_RUN.md](LAB4_RUN.md) supplies prompts, command/model settings, scores, IDs, excerpts, comparisons, and honest failures. Skill hashes, committed full evidence/artifacts, and complete rubric verification are absent.
 
 ### Phase 5: Verification And Handoff
 
 Plan item **5.1**. Requirements: REQ-001 through REQ-008.
 
-- [ ] T012 [Plan:5.1] Run the verification cases below using existing helpers in `tests/test_mini_coding_agent.py` or a temporary harness; run the existing suite and record actual results in `LAB4_RUN.md`. Add permanent regression cases only if test changes are authorized.
-- [ ] T013 [Plan:5.1] Update `README.md` and `EXAMPLE.md` with the seventh component, supported skill format, selection rules, execution-time tool, audit interpretation, and reproducible example. Update SDLC/checkpoint status from real evidence, keeping unresolved requirements open.
+- [ ] T012 [Plan:5.1] Partial: PR #3 added permanent discovery, scoring, activation, logging, reset, permission, and child-isolation regression tests. The broader original matrix and an actual suite result recorded in [LAB4_RUN.md](LAB4_RUN.md) are not supplied.
+- [ ] T013 [Plan:5.1] Partial: PR #4 updated [README.md](README.md) with skills and reproduction steps. This revision reconciles the three SDLC docs and checkpoint status notes. [EXAMPLE.md](EXAMPLE.md) remains generic, and unresolved acceptance criteria remain open.
 
-Dependencies: T001 gates T009-T011. T002 precedes implementation. T003 precedes
-T004-T005; T005 precedes T006-T008. Runtime integration must pass verification
-before T010. T012-T013 complete the handoff, not an automatic success declaration.
+Original sequencing: T001 gates T009-T011; T002 was intended to precede
+implementation; T003 precedes T004-T005; T005 precedes T006-T008; runtime
+verification precedes a complete T010; T012-T013 finish handoff. This ordering is
+not proof that every prerequisite was fulfilled in the merged work.
 
-## Verification Criteria
+## Verification And Remaining Handoff
 
-- Discovery: both root and filename spellings, multiline description, missing
-  roots, malformed/duplicate files, unreadable/oversized content, path/symlink escape.
-- Routing: relevant and unrelated queries, explicit request, unknown skill,
-  empty query, ties, stable scores, execution-time request, duplicate suppression.
-- Execution: instructions persist through multiple turns but not the next request;
-  expected normal tool actions occur; denied writes/shell actions stay denied;
-  missing prerequisites and exhausted step budgets are visible failures/incomplete.
-- Persistence: full prompt and candidate scores survive save/load; activation and
-  tool events correlate; legacy sessions load; reset/resume/delegation do not leak
-  active instructions or silently erase required demonstration evidence.
-- Regression: `python -m pytest -q`, or `uv run python -m pytest -q` in the project
-  environment. Model-independent checks use `FakeModelClient`; they do not prove
-  real Ollama instruction-following or Lab 4 correctness.
-- Demonstration: real Ollama run plus Lab 4's supplied verification procedure.
-  Missing lab resources or unavailable Ollama are reported as blocked, not passed.
-- Audit files contain full prompts and tool output; inspect/redact secrets before
-  sharing evidence, while retaining the original local record. Record redactions.
+Available model-independent evidence:
 
-## Project Files
+- [tests/test_skills.py](tests/test_skills.py): repository skills, missing roots,
+  singular/lowercase spelling, folded descriptions, invalid/oversized content,
+  duplicate handling, file-symlink escape, JSON-lines logging, prompt lifetime,
+  mid-task activation, invalid/repeated requests, denied approval, reset,
+  empty registries, and child isolation.
+- [tests/test_skill_scoring.py](tests/test_skill_scoring.py): relevant/unrelated
+  prompts, candidate ordering, empty/stopword queries, case/punctuation,
+  equal-threshold selection, ties, empty registries, and deterministic results.
+- [tests/test_mini_coding_agent.py](tests/test_mini_coding_agent.py): existing
+  agent regression coverage, including session save/resume and delegation.
 
-Keep implementation in `mini_coding_agent.py` and reuse the existing test helpers.
-SDLC files: `intend.md`, `spec.md`, `plan.md`, and the two traceability checkpoints.
-Reuse `skills/delegate/SKILL.md` and `skills/hook-check/SKILL.md`; update either
-only as authorized. Create `LAB4_RUN.md` during
-execution, linking actual lab artifacts and saved sessions rather than fabricating
-sample output. No separate task directory or new framework is needed.
+Reproduction commands are `python -m pytest -q` or
+`uv run python -m pytest -q` in the project environment. This documentation-only
+update does not claim a new test or Ollama run. Test presence is not proof of a
+historical passing run or real-model fidelity.
 
-## Requirement Mapping
+Remaining verification from the original plan includes unreadable-directory/
+ambiguous-file boundaries, activation-time file changes, aggregate limits,
+skill-specific resume/error/step-limit behavior, and stronger audit provenance.
+Those must be paired with implementation work where the required behavior is
+currently absent.
 
-| Requirement | Plan Items | Tasks | Expected Evidence |
+For Lab 4, correct and independently verify the 4x4 grid and specialist
+frontmatter/permissions, complete Strategy 1 hook/context configuration and
+applicable `hook-check` execution, and verify the required project README.
+The documented failed six-step attempt and partial fifteen-step retry are not
+lab sign-off. Windows `run_shell` uses the platform shell (`cmd.exe`); starting
+Windows Python from Git Bash alone does not change that shell. Portable commands
+or an appropriate runtime are prerequisites for the original POSIX snippets.
+
+Full logs contain prompts/tool data: inspect and redact sensitive material before
+sharing, retain local originals, and record redactions. Published run excerpts
+are abbreviated and external evidence is not bundled in this repository.
+
+## Project Files And Requirement Mapping
+
+Implementation remains in [mini_coding_agent.py](mini_coding_agent.py).
+Reuse [skills/delegate/SKILL.md](skills/delegate/SKILL.md) and
+[skills/hook-check/SKILL.md](skills/hook-check/SKILL.md) without unauthorized
+rewrites. SDLC artifacts are [intend.md](intend.md), [spec.md](spec.md), this
+plan, and the two [checkpoints](checkpoints/) files. The checkpoints measure
+traceability only, not completion.
+
+| Requirement | Plan Items | Tasks | Available Evidence / Open Status |
 | --- | --- | --- | --- |
-| REQ-001 | 2.1, 5.1 | T003, T012 | Registry discovery and boundary checks |
-| REQ-002 | 2.1, 5.1 | T004, T012 | Reproducible scores and routing decisions |
-| REQ-003 | 3.1, 5.1 | T006, T012 | Validated execution-time skill tool |
-| REQ-004 | 3.1, 4.1, 5.1 | T005, T006, T009, T012 | Persistent instructions and permission outcomes |
-| REQ-005 | 3.1, 4.1, 5.1 | T007, T010, T011, T012 | Correlated session audit and lab evidence |
-| REQ-006 | 3.1, 5.1 | T008, T012 | Legacy/resume/reset/delegation checks |
-| REQ-007 | 1.1, 4.1, 5.1 | T001, T009, T010, T011, T012 | Actual Lab 4 rubric and verified artifacts |
-| REQ-008 | 1.1, 5.1 | T001, T002, T013 | Reviewed SDLC files and usage documentation |
+| REQ-001 | 2.1, 5.1 | T003, T012 | Registry/tests; recovery and boundary gaps remain |
+| REQ-002 | 2.1, 5.1 | T004, T012 | Lexical scoring/tests; explicit user routing/calibration absent |
+| REQ-003 | 3.1, 5.1 | T006, T012 | Validated named execution-time tool and regression cases |
+| REQ-004 | 3.1, 4.1, 5.1 | T005, T006, T009, T012 | Request-scoped instructions/approval tests; stronger activation checks and prerequisites open |
+| REQ-005 | 3.1, 4.1, 5.1 | T007, T010, T011, T012 | Separate activity log/run excerpts; provenance and lifecycle incomplete |
+| REQ-006 | 3.1, 5.1 | T008, T012 | Existing sessions/reset/child isolation; linked audit and skill-resume evidence incomplete |
+| REQ-007 | 1.1, 4.1, 5.1 | T001, T009, T010, T011, T012 | Handout and partial real run; full lab verification open |
+| REQ-008 | 1.1, 5.1 | T001, T002, T013 | SDLC/checkpoints/README/run log; baseline approval and skills-specific EXAMPLE handoff incomplete |
 
-All eight requirements have planned coverage; none is claimed implemented.
+All eight requirements retain plan/task coverage. Coverage is not an assertion
+that their original acceptance criteria are complete.
